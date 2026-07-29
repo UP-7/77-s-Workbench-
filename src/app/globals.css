@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============ 主题变量：暖木 + 琥珀（文玩气质） ============ */
+@layer base {
+  :root {
+    --background: 40 33% 97%;
+    --foreground: 24 18% 14%;
+    --card: 38 40% 99%;
+    --card-foreground: 24 18% 14%;
+    --primary: 27 55% 36%;
+    --primary-foreground: 40 40% 97%;
+    --secondary: 36 30% 91%;
+    --secondary-foreground: 26 30% 24%;
+    --muted: 36 24% 92%;
+    --muted-foreground: 26 12% 44%;
+    --accent: 152 28% 30%;
+    --accent-foreground: 150 30% 96%;
+    --destructive: 4 66% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 40% 34%;
+    --success-foreground: 150 30% 96%;
+    --border: 32 20% 86%;
+    --input: 32 20% 84%;
+    --ring: 27 55% 42%;
+  }
+
+  .dark {
+    --background: 24 14% 8%;
+    --foreground: 38 26% 90%;
+    --card: 25 13% 12%;
+    --card-foreground: 38 26% 90%;
+    --primary: 33 62% 60%;
+    --primary-foreground: 26 40% 12%;
+    --secondary: 26 12% 18%;
+    --secondary-foreground: 36 22% 84%;
+    --muted: 26 11% 17%;
+    --muted-foreground: 32 10% 60%;
+    --accent: 152 30% 56%;
+    --accent-foreground: 158 40% 10%;
+    --destructive: 4 62% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 36% 48%;
+    --success-foreground: 158 40% 10%;
+    --border: 26 10% 21%;
+    --input: 26 10% 24%;
+    --ring: 33 62% 56%;
+  }
+
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-height: 100%;
+    overscroll-behavior-y: none;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer utilities {
+  /* iOS 安全区域 */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .touch-callout-none {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  /* 待办完成划掉动画 */
+  .strike-wrap {
+    position: relative;
+    display: inline-block;
+  }
+  .strike-wrap::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 55%;
+    height: 2px;
+    width: 0;
+    background: hsl(var(--muted-foreground));
+    border-radius: 1px;
+  }
+  .strike-wrap.striked::after {
+    animation: strike 0.3s ease-out forwards;
+  }
+
+  /* 瀑布流 */
+  .masonry {
+    column-count: 2;
+    column-gap: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .masonry {
+      column-count: 3;
+    }
+  }
+  .masonry > * {
+    break-inside: avoid;
+    margin-bottom: 0.75rem;
+  }
+}

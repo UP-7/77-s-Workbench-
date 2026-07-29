@@ -1,0 +1,55 @@
+{
+  "name": "77的工作台",
+  "short_name": "77工作台",
+  "description": "77 的个人第二大脑：计划、资讯、文玩、账本、商账，一站式移动工作台",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf7f2",
+  "theme_color": "#8a5a2b",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": ["productivity", "lifestyle", "finance"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "语音记账",
+      "short_name": "记账",
+      "url": "/finance?voice=1",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "每日计划",
+      "short_name": "计划",
+      "url": "/planner",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "文玩阁",
+      "short_name": "文玩",
+      "url": "/collection",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
