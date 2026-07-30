@@ -1,8 +1,29 @@
 # 腾讯云 EdgeOne Pages 上线手册
 
 > 适用项目：77的工作台（Next.js 全栈 PWA）
-> **当前项目（海外区域，绑自定义域名免备案）**：`qiqi-workbench-hw` · ID：`makers-spg3crwfmrtm`
-> 旧项目（含大陆区域，默认域名带 3 小时 token）：`qiqi-workbench` · ID：`makers-nj7pfho3jvjl`
+> **正式地址**：https://hyqfxr.site（自定义域名，免备案，永久有效无 token）
+> 当前项目（海外区域）：`qiqi-workbench-hw` · ID：`makers-spg3crwfmrtm`
+> 旧项目（已弃用）：`qiqi-workbench` · ID：`makers-nj7pfho3jvjl`
+
+---
+
+## 〇、手动上线全流程速查
+
+```bash
+cd ~/Documents/model/modelA
+
+# 1.（可选）本地先跑通：npm run dev 调试，改完退出
+# 2. 构建验证（必须过，报错就先修）
+npm run build
+
+# 3. 发布到线上（约 2~3 分钟，看到 Deploy Success 即成功）
+npx edgeone makers deploy . -n qiqi-workbench-hw -e production -a overseas
+
+# 4. 手机验证：打开 https://hyqfxr.site（已安装的把 App 关开 1~2 次拿新版）
+
+# 5.（推荐）代码备份到 GitHub
+git add -A && git commit -m "feat: 本次改了什么" && git push
+```
 
 ---
 
@@ -30,20 +51,32 @@ npm run build
 # 2. 部署到腾讯云（上传 + 云端构建，约 2~3 分钟）
 npx edgeone makers deploy . -n qiqi-workbench-hw -e production -a overseas
 
-# 3. 复制输出里的 Deploy URL（带 eo_token 的完整链接），手机打开
+# 3. 手机直接访问 https://hyqfxr.site 验证（无需任何链接）
 ```
 
 部署成功的标志：终端输出 `Deploy Success` + 一条 `Deploy URL`。
 
 ---
 
-## 三、手机使用与更新
+## 三、手机使用与更新（域名版，已无 token 限制）
 
-- **首次安装**：手机浏览器（iPhone 用 Safari / 安卓用 Chrome）打开 Deploy URL → 各页面逛一遍 → "添加到主屏幕"
-- **链接时效**：Deploy URL 里的 `eo_token` 仅 **3 小时有效**（平台合规限制，无法关闭）。过期后：
-  - 已安装的 App **不受影响**，靠离线缓存照常使用（本地功能全可用）
-  - 需要新链接时：控制台 → 项目概览 → 右上角「**预览**」按钮，随时生成新链接
-- **版本更新**：发布新版后，用新的预览链接打开一次，App 自动更新缓存
+- **安装**：手机浏览器（iPhone 用 Safari / 安卓用 Chrome）打开 **https://hyqfxr.site** → 各页面逛一遍 → "添加到主屏幕"
+- **日常**：随时随地打开，离线也能用（本地功能全量可用）
+- **版本更新**：发布新版后，手机把 App 关闭重开 1~2 次即自动拿到新版，无需任何手动操作
+- 旧的带 `eo_token` 的预览链接已不再需要，忽略即可
+
+---
+
+## 三·五、线上 AI 功能配置（可选，一次性）
+
+线上想让 AI 晨报 / 语音智能解析走 DeepSeek（不配置则自动用内置本地引擎，功能不缺失）：
+
+1. 控制台 → 项目 `qiqi-workbench-hw` → **项目设置** → **环境变量** → 新增：
+   - `DEEPSEEK_API_KEY` = 你的密钥（platform.deepseek.com 申请）
+   - 可选：`AI_BASE_URL`（默认 https://api.deepseek.com/v1）、`AI_MODEL`（默认 deepseek-chat）
+2. 环境变量在**下一次部署后生效** → 重新执行一次发布命令
+3. 验证：首页晨报右下角显示「DeepSeek 生成」即成功
+4. ⚠️ 密钥只放控制台环境变量或本地 `.env.local`，**绝不能**写进代码或提交 Git
 
 ---
 

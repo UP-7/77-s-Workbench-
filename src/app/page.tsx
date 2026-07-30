@@ -22,6 +22,16 @@ import { useSettingsStore } from "@/stores/settings";
 import { fetchWeather, type WeatherNow } from "@/lib/weather";
 import { fmtMoney, todayStr, monthStr } from "@/lib/utils";
 
+/** 一天分五个时段：跨时段自动重新生成，问候语始终匹配当下 */
+function daySlot(d: Date = new Date()): { key: string; label: string } {
+  const h = d.getHours();
+  if (h < 5) return { key: "dawn", label: "夜报" };
+  if (h < 11) return { key: "morning", label: "晨报" };
+  if (h < 14) return { key: "noon", label: "午报" };
+  if (h < 18) return { key: "afternoon", label: "午后报" };
+  return { key: "evening", label: "晚报" };
+}
+
 function useTodayInsight() {
   const [text, setText] = React.useState<string>("");
   const [source, setSource] = React.useState<"ai" | "local" | "">("");
@@ -29,7 +39,7 @@ function useTodayInsight() {
   const [weather, setWeather] = React.useState<WeatherNow | null>(null);
 
   const generate = React.useCallback(async (force = false) => {
-    const cacheKey = `qiqi-insight-${todayStr()}`;
+    const cacheKey = `qiqi-insight-${todayStr()}-${daySlot().key}`;
     if (!force) {
       try {
         const cached = sessionStorage.getItem(cacheKey);
@@ -90,6 +100,12 @@ function useTodayInsight() {
 
   React.useEffect(() => {
     void generate();
+    // PWA 长驻场景：切回前台时检查时段是否已变化（命中缓存则零开销）
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void generate();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [generate]);
 
   return { text, source, loading, weather, refresh: () => generate(true) };
@@ -97,13 +113,19 @@ function useTodayInsight() {
 
 function InsightCard() {
   const { text, source, loading, weather, refresh } = useTodayInsight();
+  const [slotLabel, setSlotLabel] = React.useState("晨报");
+  React.useEffect(() => {
+    setSlotLabel(daySlot().label);
+    const t = setInterval(() => setSlotLabel(daySlot().label), 60_000);
+    return () => clearInterval(t);
+  }, []);
   return (
     <Card className="relative overflow-hidden border-none bg-gradient-to-br from-primary via-primary to-accent text-primary-foreground shadow-lg">
       <CardContent className="p-5">
         <div className="mb-2.5 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest opacity-90">
             <Sparkles className="h-3.5 w-3.5" />
-            Today&apos;s Insight · AI 晨报
+            Today&apos;s Insight · AI {slotLabel}
           </div>
           <button
             aria-label="重新生成"
@@ -115,7 +137,7 @@ function InsightCard() {
           </button>
         </div>
         <p className="min-h-[3.5rem] text-[15px] font-medium leading-relaxed">
-          {loading && !text ? "正在为你准备今日晨报…" : text || "…"}
+          {loading && !text ? `正在为你准备今日${slotLabel}…` : text || "…"}
         </p>
         <div className="mt-3 flex items-center justify-between text-[11px] opacity-85">
           <span className="flex items-center gap-1">
