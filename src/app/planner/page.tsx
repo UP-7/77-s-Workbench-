@@ -12,15 +12,18 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Check, BellRing, CalendarPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Check, BellRing, CalendarPlus, Mic } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Switch, Empty } from "@/components/ui/misc";
 import { BottomSheet } from "@/components/ui/sheet";
 import { ClientGate } from "@/components/client-gate";
+import { VoiceSheet } from "@/components/voice-sheet";
 import { usePlannerStore } from "@/stores/planner";
 import { requestNotificationPermission } from "@/lib/notifications";
+import { parseTodoLocal, type ParsedTodo } from "@/lib/todo-parser";
+import { speechSupported } from "@/hooks/use-speech";
 import { cn, todayStr, vibrate } from "@/lib/utils";
 import type { Todo } from "@/lib/types";
 
@@ -211,8 +214,48 @@ export default function PlannerPage() {
   const [title, setTitle] = React.useState("");
   const [time, setTime] = React.useState("");
   const [remind, setRemind] = React.useState(false);
+  const [voiceOpen, setVoiceOpen] = React.useState(false);
+  const [parsing, setParsing] = React.useState(false);
+  const [voiceError, setVoiceError] = React.useState("");
   const todos = usePlannerStore((s) => s.todos);
   const addTodo = usePlannerStore((s) => s.addTodo);
+  const speechOK = React.useMemo(() => speechSupported(), []);
+
+  const applyParsed = (p: ParsedTodo) => {
+    const [y, m, d] = p.date.split("-").map(Number);
+    setSelected(new Date(y, m - 1, d));
+    setTitle(p.title);
+    setTime(p.time ?? "");
+    setRemind(p.remind);
+    setVoiceOpen(false);
+    setSheetOpen(true);
+    vibrate(20);
+  };
+
+  const handleVoice = async (text: string) => {
+    setParsing(true);
+    setVoiceError("");
+    try {
+      const res = await fetch("/api/ai/parse-todo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        signal: AbortSignal.timeout(12000),
+      });
+      const data = await res.json();
+      if (data.parsed) {
+        applyParsed(data.parsed);
+        return;
+      }
+      throw new Error("empty");
+    } catch {
+      const local = parseTodoLocal(text);
+      if (local) applyParsed(local);
+      else setVoiceError("没听懂，试试「明天下午三点提醒我给妈妈打电话」");
+    } finally {
+      setParsing(false);
+    }
+  };
 
   const selKey = todayStr(selected);
   const dayTodos = todos
@@ -240,9 +283,16 @@ export default function PlannerPage() {
           <h2 className="text-sm font-semibold text-muted-foreground">
             {format(selected, "M月d日")} · {dayTodos.length ? `${dayTodos.filter((t) => t.done).length}/${dayTodos.length} 已完成` : "暂无待办"}
           </h2>
-          <Button size="sm" variant="secondary" onClick={() => setSheetOpen(true)}>
-            <Plus className="h-4 w-4" /> 添加
-          </Button>
+          <div className="flex gap-2">
+            {speechOK && (
+              <Button size="sm" variant="secondary" onClick={() => setVoiceOpen(true)} aria-label="语音添加">
+                <Mic className="h-4 w-4" /> 语音
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" onClick={() => setSheetOpen(true)}>
+              <Plus className="h-4 w-4" /> 添加
+            </Button>
+          </div>
         </div>
 
         {dayTodos.length === 0 ? (
@@ -266,6 +316,16 @@ export default function PlannerPage() {
             </button>
           </div>
         )}
+
+        <VoiceSheet
+          open={voiceOpen}
+          onClose={() => setVoiceOpen(false)}
+          title="语音添加待办"
+          hint="点击开始，说「明天下午三点提醒我给妈妈打电话」"
+          parsing={parsing}
+          externalError={voiceError}
+          onConfirm={(t) => void handleVoice(t)}
+        />
 
         <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={`添加待办 · ${format(selected, "M月d日")}`}>
           <div className="space-y-4">

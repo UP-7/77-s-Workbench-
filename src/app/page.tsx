@@ -133,6 +133,7 @@ function OverviewCards() {
   const todos = usePlannerStore((s) => s.todos);
   const records = useFinanceStore((s) => s.records);
   const gourds = useBusinessStore((s) => s.gourds);
+  const bizLabel = useBusinessStore((s) => s.config.label);
 
   const today = todayStr();
   const todayTodos = todos.filter((t) => t.date === today);
@@ -164,9 +165,9 @@ function OverviewCards() {
     {
       href: "/business",
       icon: Store,
-      label: "葫芦库存",
-      value: `${inStock} 只在库`,
-      sub: lowStock ? "库存偏低，该补货了" : `另有 ${reserved} 只已预定`,
+      label: `${bizLabel}库存`,
+      value: `${inStock} 件在库`,
+      sub: lowStock ? "库存偏低，该补货了" : `另有 ${reserved} 件已预定`,
       tone: lowStock ? "text-destructive" : "text-success",
       warn: lowStock,
     },

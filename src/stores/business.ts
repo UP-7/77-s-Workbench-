@@ -5,9 +5,25 @@ import { persist } from "zustand/middleware";
 import type { BizExpense, Gourd, GourdStatus } from "@/lib/types";
 import { uid, todayStr, monthStr } from "@/lib/utils";
 
+export interface BizConfig {
+  label: string; // 商品名，如 葫芦/核桃/手串
+  codePrefix: string; // 编号前缀
+  varieties: string[]; // 品种/分类
+}
+
+const DEFAULT_CONFIG: BizConfig = {
+  label: "葫芦",
+  codePrefix: "HL",
+  varieties: ["美国八宝", "本长手捻", "苹果肚", "蚂蚁肚", "异形", "大葫芦", "其他"],
+};
+
 interface BusinessState {
   gourds: Gourd[];
   expenses: BizExpense[];
+  config: BizConfig;
+  updateConfig: (patch: Partial<BizConfig>) => void;
+  addVariety: (v: string) => void;
+  removeVariety: (v: string) => void;
   addGourd: (input: {
     name: string;
     variety: string;
@@ -25,9 +41,9 @@ interface BusinessState {
 
 const STATUS_CYCLE: GourdStatus[] = ["in_stock", "reserved", "sold"];
 
-function genCode(existing: Gourd[]): string {
+function genCode(existing: Gourd[], prefix: string): string {
   const n = existing.length + 1;
-  return `HL-${String(n).padStart(4, "0")}`;
+  return `${prefix}-${String(n).padStart(4, "0")}`;
 }
 
 export const useBusinessStore = create<BusinessState>()(
@@ -35,12 +51,33 @@ export const useBusinessStore = create<BusinessState>()(
     (set) => ({
       gourds: [],
       expenses: [],
+      config: DEFAULT_CONFIG,
+      updateConfig: (patch) =>
+        set((s) => ({
+          config: {
+            ...s.config,
+            ...patch,
+            label: (patch.label ?? s.config.label).trim() || "商品",
+            codePrefix:
+              (patch.codePrefix ?? s.config.codePrefix).trim().toUpperCase().slice(0, 5) || "SP",
+          },
+        })),
+      addVariety: (v) =>
+        set((s) => {
+          const name = v.trim();
+          if (!name || s.config.varieties.includes(name)) return s;
+          return { config: { ...s.config, varieties: [...s.config.varieties, name] } };
+        }),
+      removeVariety: (v) =>
+        set((s) => ({
+          config: { ...s.config, varieties: s.config.varieties.filter((x) => x !== v) },
+        })),
       addGourd: (input) =>
         set((s) => ({
           gourds: [
             {
               id: uid(),
-              code: genCode(s.gourds),
+              code: genCode(s.gourds, s.config.codePrefix),
               name: input.name.trim(),
               variety: input.variety,
               status: "in_stock" as GourdStatus,

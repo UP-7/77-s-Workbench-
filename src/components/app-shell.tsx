@@ -29,7 +29,7 @@ const NAV_ITEMS = [
   { href: "/feed", label: "技术资讯", sub: "Tech Feed", icon: Newspaper },
   { href: "/collection", label: "文玩阁", sub: "Collection", icon: Gem },
   { href: "/atelier", label: "素材坊", sub: "Atelier", icon: PenTool },
-  { href: "/business", label: "葫芦商账", sub: "Business Hub", icon: Store },
+  { href: "/business", label: "生意商账", sub: "Business Hub", icon: Store },
   { href: "/settings", label: "设置", sub: "Settings", icon: Settings },
 ] as const;
 
