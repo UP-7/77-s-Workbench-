@@ -5,11 +5,30 @@ import { X, Crop, FlipHorizontal2, FlipVertical2, RotateCw, Check, Copy } from "
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Switch } from "@/components/ui/misc";
-import { updateAsset, saveAsset, imageDimensions } from "@/lib/db";
+import { updateAsset, saveAsset } from "@/lib/db";
 import { cn, vibrate } from "@/lib/utils";
 import type { CarvingAsset } from "@/lib/types";
 
 type CropBox = { x: number; y: number; w: number; h: number }; // 相对比例 0~1
+
+const DEFAULT_CROP: CropBox = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+
+/** 以 HTMLImageElement 加载 Blob（iOS Safari 兼容，替代 createImageBitmap） */
+function loadImage(blob: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
 
 interface Props {
   asset: CarvingAsset & { blob: Blob };
@@ -21,12 +40,13 @@ interface Props {
 export function AssetEditor({ asset, onClose, onSaved }: Props) {
   const [blob, setBlob] = React.useState<Blob>(asset.blob);
   const [url, setUrl] = React.useState<string>("");
+  const urlRef = React.useRef<string>("");
   const [widthMm, setWidthMm] = React.useState(String(asset.widthMm));
   const [heightMm, setHeightMm] = React.useState(String(asset.heightMm));
   const [lockRatio, setLockRatio] = React.useState(true);
   const [ratio, setRatio] = React.useState(asset.widthMm / asset.heightMm);
   const [cropping, setCropping] = React.useState(false);
-  const [crop, setCrop] = React.useState<CropBox>({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+  const [crop, setCrop] = React.useState<CropBox>(DEFAULT_CROP);
   const [busy, setBusy] = React.useState(false);
   const imgWrapRef = React.useRef<HTMLDivElement>(null);
   const gestureRef = React.useRef<{
@@ -34,13 +54,25 @@ export function AssetEditor({ asset, onClose, onSaved }: Props) {
     startX: number;
     startY: number;
     startCrop: CropBox;
-  }>({ mode: null, startX: 0, startY: 0, startCrop: crop });
+  }>({ mode: null, startX: 0, startY: 0, startCrop: DEFAULT_CROP });
+
+  /** 原子切换预览 URL：先建新的再撤旧的，预览永不指向已失效地址 */
+  const swapUrl = React.useCallback((b: Blob) => {
+    const next = URL.createObjectURL(b);
+    const prev = urlRef.current;
+    urlRef.current = next;
+    setUrl(next);
+    if (prev) URL.revokeObjectURL(prev);
+  }, []);
 
   React.useEffect(() => {
-    const u = URL.createObjectURL(blob);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [blob]);
+    swapUrl(asset.blob);
+    return () => {
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+      urlRef.current = "";
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   React.useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -66,51 +98,63 @@ export function AssetEditor({ asset, onClose, onSaved }: Props) {
     if (busy) return;
     setBusy(true);
     try {
-      const dim = await imageDimensions(blob);
-      const img = await createImageBitmap(blob);
+      const img = await loadImage(blob);
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
       const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d")!;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
       if (op === "crop") {
-        const sx = Math.round(crop.x * dim.w);
-        const sy = Math.round(crop.y * dim.h);
-        const sw = Math.max(1, Math.round(crop.w * dim.w));
-        const sh = Math.max(1, Math.round(crop.h * dim.h));
+        const sx = Math.round(crop.x * iw);
+        const sy = Math.round(crop.y * ih);
+        const sw = Math.max(1, Math.round(crop.w * iw));
+        const sh = Math.max(1, Math.round(crop.h * ih));
         canvas.width = sw;
         canvas.height = sh;
         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-        // 裁剪后毫米尺寸按比例缩小
+      } else if (op === "rotate") {
+        canvas.width = ih;
+        canvas.height = iw;
+        ctx.translate(ih / 2, iw / 2);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(img, -iw / 2, -ih / 2);
+      } else {
+        canvas.width = iw;
+        canvas.height = ih;
+        if (op === "flipH") {
+          ctx.translate(iw, 0);
+          ctx.scale(-1, 1);
+        } else {
+          ctx.translate(0, ih);
+          ctx.scale(1, -1);
+        }
+        ctx.drawImage(img, 0, 0);
+      }
+
+      const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
+      if (!out) return;
+
+      // 先更新状态与预览（原子切换），再做派生调整
+      setBlob(out);
+      swapUrl(out);
+
+      if (op === "crop") {
         const newW = Math.max(5, Math.round(Number(widthMm) * crop.w));
         const newH = Math.max(5, Math.round(Number(heightMm) * crop.h));
         setWidthMm(String(newW));
         setHeightMm(String(newH));
         setRatio(newW / newH);
+        setCrop(DEFAULT_CROP); // 重置裁剪框，避免残留旧选区
         setCropping(false);
       } else if (op === "rotate") {
-        canvas.width = dim.h;
-        canvas.height = dim.w;
-        ctx.translate(dim.h / 2, dim.w / 2);
-        ctx.rotate(Math.PI / 2);
-        ctx.drawImage(img, -dim.w / 2, -dim.h / 2);
-        // 宽高互换
         setWidthMm(heightMm);
         setHeightMm(widthMm);
         setRatio(1 / ratio);
-      } else {
-        canvas.width = dim.w;
-        canvas.height = dim.h;
-        if (op === "flipH") {
-          ctx.translate(dim.w, 0);
-          ctx.scale(-1, 1);
-        } else {
-          ctx.translate(0, dim.h);
-          ctx.scale(1, -1);
-        }
-        ctx.drawImage(img, 0, 0);
       }
-      const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
-      if (out) setBlob(out);
       vibrate(15);
+    } catch {
+      /* 单次变换失败不影响当前图像 */
     } finally {
       setBusy(false);
     }

@@ -1,7 +1,8 @@
 # 腾讯云 EdgeOne Pages 上线手册
 
 > 适用项目：77的工作台（Next.js 全栈 PWA）
-> 项目名：`qiqi-workbench` · 项目 ID：`makers-nj7pfho3jvjl`
+> **当前项目（海外区域，绑自定义域名免备案）**：`qiqi-workbench-hw` · ID：`makers-spg3crwfmrtm`
+> 旧项目（含大陆区域，默认域名带 3 小时 token）：`qiqi-workbench` · ID：`makers-nj7pfho3jvjl`
 
 ---
 
@@ -27,7 +28,7 @@
 npm run build
 
 # 2. 部署到腾讯云（上传 + 云端构建，约 2~3 分钟）
-npx edgeone makers deploy . -n qiqi-workbench -e production
+npx edgeone makers deploy . -n qiqi-workbench-hw -e production -a overseas
 
 # 3. 复制输出里的 Deploy URL（带 eo_token 的完整链接），手机打开
 ```

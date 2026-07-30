@@ -25,10 +25,10 @@ import { useReminders } from "@/hooks/use-reminders";
 const NAV_ITEMS = [
   { href: "/", label: "首页", sub: "Dashboard", icon: Home },
   { href: "/planner", label: "每日计划", sub: "Planner", icon: CalendarCheck2 },
+  { href: "/finance", label: "收支账本", sub: "Daily Finance", icon: Wallet },
   { href: "/feed", label: "技术资讯", sub: "Tech Feed", icon: Newspaper },
   { href: "/collection", label: "文玩阁", sub: "Collection", icon: Gem },
   { href: "/atelier", label: "素材坊", sub: "Atelier", icon: PenTool },
-  { href: "/finance", label: "收支账本", sub: "Daily Finance", icon: Wallet },
   { href: "/business", label: "葫芦商账", sub: "Business Hub", icon: Store },
   { href: "/settings", label: "设置", sub: "Settings", icon: Settings },
 ] as const;
