@@ -81,16 +81,25 @@ export const GOURD_STATUS_LABEL: Record<GourdStatus, string> = {
   sold: "已售",
 };
 
+export interface GourdSale {
+  id: string;
+  qty: number; // 本次售出数量
+  unitPrice: number; // 成交单价（每件）
+  date: string; // yyyy-MM-dd
+}
+
 export interface Gourd {
   id: string;
   code: string; // 编号（可用于扫码）
   name: string;
   variety: string; // 品种：美国、本长、手捻、异形…
   status: GourdStatus;
-  costPrice: number; // 进货价
+  costPrice: number; // 进货总价（整批；quantity=1 时即单件价）
   shippingCost: number; // 快递费
-  salePrice?: number; // 售价
-  soldAt?: string; // yyyy-MM-dd
+  quantity?: number; // 进货数量（老数据缺省视为 1）
+  sales?: GourdSale[]; // 售出流水（新模型；老数据由 salePrice/soldAt 归一化）
+  salePrice?: number; // [旧] 售价——仅老数据存在，读取时归一化为一笔流水
+  soldAt?: string; // yyyy-MM-dd（售罄日期）
   reservedBy?: string;
   note?: string;
   createdAt: number;

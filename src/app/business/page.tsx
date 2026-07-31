@@ -30,7 +30,19 @@ import { Segmented, Badge, Empty } from "@/components/ui/misc";
 import { BottomSheet, ConfirmDialog } from "@/components/ui/sheet";
 import { ClientGate } from "@/components/client-gate";
 import { VoiceSheet } from "@/components/voice-sheet";
-import { useBusinessStore, profitTrend, bestSellers } from "@/stores/business";
+import {
+  useBusinessStore,
+  profitTrend,
+  bestSellers,
+  yearSummary,
+  totalQty,
+  remainQty,
+  soldQty,
+  unitCost,
+  revenueOf,
+  realizedProfit,
+  salesOf,
+} from "@/stores/business";
 import { parseBizLocal, type ParsedBiz } from "@/lib/biz-parser";
 import { speechSupported } from "@/hooks/use-speech";
 import { cn, fmtMoney, vibrate } from "@/lib/utils";
@@ -231,11 +243,13 @@ function StockTab({
   salePrefill: SalePrefill | null;
   onConsumed: () => void;
 }) {
-  const { gourds, config, cycleStatus, markSold, removeGourd, addGourd } = useBusinessStore();
+  const { gourds, config, cycleStatus, addSale, removeGourd, addGourd } = useBusinessStore();
+  const [view, setView] = React.useState<"stock" | "sold">("stock");
   const [addOpen, setAddOpen] = React.useState(false);
   const [scanOpen, setScanOpen] = React.useState(false);
   const [sellTarget, setSellTarget] = React.useState<Gourd | null>(null);
   const [salePrice, setSalePrice] = React.useState("");
+  const [saleQty, setSaleQty] = React.useState("1");
   const [deleteTarget, setDeleteTarget] = React.useState<Gourd | null>(null);
   const [highlight, setHighlight] = React.useState<string | null>(null);
 
@@ -243,6 +257,7 @@ function StockTab({
   const [variety, setVariety] = React.useState(config.varieties[0] ?? "其他");
   const [cost, setCost] = React.useState("");
   const [shipping, setShipping] = React.useState("");
+  const [qty, setQty] = React.useState("1");
 
   /* 语音结果消费：进货预填 / 售出定位 */
   React.useEffect(() => {
@@ -250,6 +265,7 @@ function StockTab({
       setName(purchasePrefill.name);
       setCost(String(purchasePrefill.cost));
       setShipping(purchasePrefill.shipping ? String(purchasePrefill.shipping) : "");
+      setQty("1");
       setAddOpen(true);
       onConsumed();
     }
@@ -259,20 +275,27 @@ function StockTab({
     if (salePrefill) {
       const g = gourds.find((x) => x.id === salePrefill.gourdId);
       if (g) {
+        setView("stock");
         setSellTarget(g);
         setSalePrice(String(salePrefill.amount));
+        setSaleQty("1");
       }
       onConsumed();
     }
   }, [salePrefill, gourds, onConsumed]);
 
+  const openSell = (g: Gourd) => {
+    setSellTarget(g);
+    setSalePrice("");
+    setSaleQty("1");
+  };
+
   const handleStatusTap = (g: Gourd) => {
     vibrate(15);
     if (g.status === "reserved") {
-      setSellTarget(g);
-      setSalePrice(g.salePrice ? String(g.salePrice) : "");
+      openSell(g);
     } else {
-      cycleStatus(g.id);
+      cycleStatus(g.id); // 在库→预定；售罄→恢复在库
     }
   };
 
@@ -280,8 +303,13 @@ function StockTab({
     setScanOpen(false);
     const hit = gourds.find((g) => g.code.toUpperCase() === code.toUpperCase());
     if (hit) {
+      setView(remainQty(hit) > 0 ? "stock" : "sold");
       setHighlight(hit.id);
-      document.getElementById(`gourd-${hit.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(
+        () =>
+          document.getElementById(`gourd-${hit.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+        60
+      );
       setTimeout(() => setHighlight(null), 2600);
     }
   };
@@ -293,13 +321,32 @@ function StockTab({
       variety,
       costPrice: Number(cost) || 0,
       shippingCost: Number(shipping) || 0,
+      quantity: Math.max(1, Math.round(Number(qty) || 1)),
     });
     vibrate(20);
     setAddOpen(false);
     setName("");
     setCost("");
     setShipping("");
+    setQty("1");
   };
+
+  const inStockList = gourds.filter((g) => remainQty(g) > 0);
+  const soldOutList = gourds.filter((g) => remainQty(g) === 0);
+  const list = view === "stock" ? inStockList : soldOutList;
+
+  /* 已售视图汇总：帮用户一眼看到赚了多少 */
+  const soldStats = React.useMemo(() => {
+    let revenue = 0;
+    let profit = 0;
+    let count = 0;
+    for (const g of gourds) {
+      revenue += revenueOf(g);
+      profit += realizedProfit(g);
+      count += soldQty(g);
+    }
+    return { revenue, profit, count };
+  }, [gourds]);
 
   return (
     <div className="space-y-3">
@@ -312,16 +359,49 @@ function StockTab({
         </Button>
       </div>
 
-      {gourds.length === 0 ? (
+      <Segmented
+        value={view}
+        onChange={setView}
+        options={[
+          { label: `在库（${inStockList.length}）`, value: "stock" },
+          { label: `已售罄（${soldOutList.length}）`, value: "sold" },
+        ]}
+      />
+
+      {view === "sold" && soldStats.count > 0 && (
+        <Card className="border-none bg-success/10">
+          <CardContent className="flex items-center justify-around p-3 text-center">
+            <div>
+              <p className="text-[10px] text-muted-foreground">累计售出</p>
+              <p className="text-sm font-bold tabular-nums">{soldStats.count} 件</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">销售收入</p>
+              <p className="text-sm font-bold tabular-nums">{fmtMoney(soldStats.revenue)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">已赚利润</p>
+              <p className={cn("text-sm font-bold tabular-nums", soldStats.profit >= 0 ? "text-success" : "text-destructive")}>
+                {fmtMoney(soldStats.profit)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {list.length === 0 ? (
         <Empty
           icon={<Package className="h-10 w-10" />}
-          title="仓库还是空的"
-          hint={`点击进货入库，登记第一件${config.label}`}
+          title={view === "stock" ? "仓库还是空的" : "还没有售罄的批次"}
+          hint={view === "stock" ? `点击进货入库，登记第一件${config.label}` : "商品全部卖完后会归到这里"}
         />
       ) : (
-        gourds.map((g) => {
-          const costAll = g.costPrice + g.shippingCost;
-          const profit = g.status === "sold" && g.salePrice ? g.salePrice - costAll : null;
+        list.map((g) => {
+          const total = totalQty(g);
+          const remain = remainQty(g);
+          const sold = soldQty(g);
+          const uc = unitCost(g);
+          const profit = realizedProfit(g);
           return (
             <Card
               key={g.id}
@@ -332,24 +412,34 @@ function StockTab({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] text-muted-foreground">{g.code}</span>
+                    {total > 1 && (
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                        剩 {remain}/{total} 件
+                      </span>
+                    )}
                     {g.reservedBy && <span className="text-[10px] text-amber-600">留给 {g.reservedBy}</span>}
                   </div>
                   <p className="truncate text-[15px] font-semibold">{g.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {g.variety} · 成本 {fmtMoney(costAll)}
-                    {g.status === "sold" && g.salePrice != null && (
+                    {g.variety} · {total > 1 ? `单件成本 ${fmtMoney(uc)}` : `成本 ${fmtMoney(g.costPrice + g.shippingCost)}`}
+                    {sold > 0 && (
                       <>
-                        {" "}· 售 {fmtMoney(g.salePrice)}
-                        <span className={cn("ml-1 font-medium", (profit ?? 0) >= 0 ? "text-success" : "text-destructive")}>
-                          {(profit ?? 0) >= 0 ? "赚" : "亏"} {fmtMoney(Math.abs(profit ?? 0))}
+                        {" "}· 已售 {sold} 件 {fmtMoney(revenueOf(g))}
+                        <span className={cn("ml-1 font-medium", profit >= 0 ? "text-success" : "text-destructive")}>
+                          {profit >= 0 ? "赚" : "亏"} {fmtMoney(Math.abs(profit))}
                         </span>
                       </>
                     )}
                   </p>
                 </div>
+                {remain > 0 && (
+                  <Button size="sm" className="h-8 shrink-0 px-3" onClick={() => openSell(g)}>
+                    售出
+                  </Button>
+                )}
                 <button onClick={() => handleStatusTap(g)} aria-label="切换状态" className="active:scale-90">
                   <Badge className={cn("h-8 px-3 text-xs", STATUS_TONE[g.status])}>
-                    {GOURD_STATUS_LABEL[g.status]} →
+                    {GOURD_STATUS_LABEL[g.status]}
                   </Badge>
                 </button>
                 <button
@@ -394,9 +484,13 @@ function StockTab({
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <Label htmlFor="g-cost">进货价 ¥</Label>
+              <Label htmlFor="g-qty">数量（件）</Label>
+              <Input id="g-qty" type="number" inputMode="numeric" min={1} value={qty} onChange={(e) => setQty(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="g-cost">进货总价 ¥</Label>
               <Input id="g-cost" type="number" inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
             </div>
             <div>
@@ -404,17 +498,47 @@ function StockTab({
               <Input id="g-ship" type="number" inputMode="decimal" value={shipping} onChange={(e) => setShipping(e.target.value)} />
             </div>
           </div>
+          {Number(qty) > 1 && Number(cost) > 0 && (
+            <p className="text-center text-xs text-muted-foreground">
+              {qty} 件共 {fmtMoney(Number(cost) + (Number(shipping) || 0))} · 单件摊 {fmtMoney((Number(cost) + (Number(shipping) || 0)) / Math.max(1, Number(qty)))}
+            </p>
+          )}
           <Button className="w-full" size="lg" onClick={submitAdd} disabled={!name.trim() || !cost}>
             入库（自动生成编号）
           </Button>
         </div>
       </BottomSheet>
 
-      {/* 售出登记 */}
+      {/* 售出登记：数量 × 单价 */}
       <BottomSheet open={Boolean(sellTarget)} onClose={() => setSellTarget(null)} title={`售出 · ${sellTarget?.name ?? ""}`}>
         <div className="space-y-4">
+          {sellTarget && totalQty(sellTarget) > 1 && (
+            <div>
+              <Label htmlFor="sale-qty">数量（剩 {remainQty(sellTarget)} 件）</Label>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" className="h-11 w-11 shrink-0 text-lg" onClick={() => setSaleQty(String(Math.max(1, Number(saleQty) - 1)))}>
+                  −
+                </Button>
+                <Input
+                  id="sale-qty"
+                  type="number"
+                  inputMode="numeric"
+                  className="h-11 text-center text-lg font-bold"
+                  value={saleQty}
+                  onChange={(e) => setSaleQty(e.target.value)}
+                />
+                <Button
+                  variant="secondary"
+                  className="h-11 w-11 shrink-0 text-lg"
+                  onClick={() => setSaleQty(String(Math.min(remainQty(sellTarget), Number(saleQty) + 1)))}
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+          )}
           <div>
-            <Label htmlFor="sale-price">成交价 ¥</Label>
+            <Label htmlFor="sale-price">成交单价 ¥{Number(saleQty) > 1 ? "（每件）" : ""}</Label>
             <Input
               id="sale-price"
               type="number"
@@ -427,9 +551,15 @@ function StockTab({
           </div>
           {sellTarget && salePrice && (
             <p className="text-center text-sm text-muted-foreground">
-              成本 {fmtMoney(sellTarget.costPrice + sellTarget.shippingCost)} · 预计
-              <span className="mx-1 font-semibold text-success">
-                {fmtMoney(Number(salePrice) - sellTarget.costPrice - sellTarget.shippingCost)}
+              {Number(saleQty) > 1 && <>共收 {fmtMoney(Number(salePrice) * Number(saleQty))} · </>}
+              单件成本 {fmtMoney(unitCost(sellTarget))} · 预计
+              <span
+                className={cn(
+                  "mx-1 font-semibold",
+                  (Number(salePrice) - unitCost(sellTarget)) * Number(saleQty) >= 0 ? "text-success" : "text-destructive"
+                )}
+              >
+                {fmtMoney((Number(salePrice) - unitCost(sellTarget)) * Math.max(1, Number(saleQty)))}
               </span>
               利润
             </p>
@@ -437,16 +567,22 @@ function StockTab({
           <Button
             className="w-full"
             size="lg"
-            disabled={!salePrice || Number(salePrice) <= 0}
+            disabled={
+              !salePrice ||
+              Number(salePrice) <= 0 ||
+              !saleQty ||
+              Number(saleQty) < 1 ||
+              (sellTarget ? Number(saleQty) > remainQty(sellTarget) : false)
+            }
             onClick={() => {
               if (sellTarget) {
-                markSold(sellTarget.id, Number(salePrice));
+                addSale(sellTarget.id, Number(saleQty), Number(salePrice));
                 vibrate([30, 40, 30]);
               }
               setSellTarget(null);
             }}
           >
-            确认售出
+            确认售出{Number(saleQty) > 1 ? ` ${saleQty} 件` : ""}
           </Button>
         </div>
       </BottomSheet>
@@ -473,7 +609,7 @@ function ExpenseTab({
   expensePrefill: ExpensePrefill | null;
   onConsumed: () => void;
 }) {
-  const { expenses, addExpense, removeExpense, gourds } = useBusinessStore();
+  const { expenses, addExpense, removeExpense, gourds, removeSale } = useBusinessStore();
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [amount, setAmount] = React.useState("");
@@ -489,7 +625,24 @@ function ExpenseTab({
     }
   }, [expensePrefill, onConsumed]);
 
-  const sold = gourds.filter((g) => g.status === "sold");
+  /* 逐笔销售流水（跨批次汇总，按日期倒序） */
+  const saleRows = React.useMemo(() => {
+    const rows: { gourd: Gourd; saleId: string; qty: number; unitPrice: number; date: string; profit: number }[] = [];
+    for (const g of gourds) {
+      const uc = unitCost(g);
+      for (const s of salesOf(g)) {
+        rows.push({
+          gourd: g,
+          saleId: s.id,
+          qty: s.qty,
+          unitPrice: s.unitPrice,
+          date: s.date,
+          profit: s.qty * (s.unitPrice - uc),
+        });
+      }
+    }
+    return rows.sort((a, b) => b.date.localeCompare(a.date));
+  }, [gourds]);
 
   return (
     <div className="space-y-4">
@@ -530,21 +683,34 @@ function ExpenseTab({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">销售流水（{sold.length}）</CardTitle>
+          <CardTitle className="text-sm">销售流水（{saleRows.length} 笔）</CardTitle>
         </CardHeader>
         <CardContent className="divide-y p-0">
-          {sold.length === 0 ? (
+          {saleRows.length === 0 ? (
             <p className="p-4 text-center text-xs text-muted-foreground">还没有售出记录</p>
           ) : (
-            sold.map((g) => (
-              <div key={g.id} className="flex items-center gap-3 p-3.5">
+            saleRows.map((r) => (
+              <div key={r.saleId} className="flex items-center gap-3 p-3.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm">{g.name}</p>
+                  <p className="truncate text-sm">
+                    {r.gourd.name}
+                    {r.qty > 1 && <span className="ml-1 text-xs text-muted-foreground">× {r.qty}</span>}
+                  </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {g.soldAt} · 成本 {fmtMoney(g.costPrice + g.shippingCost)}
+                    {r.date} · {r.gourd.code} ·{" "}
+                    <span className={r.profit >= 0 ? "text-success" : "text-destructive"}>
+                      {r.profit >= 0 ? "赚" : "亏"} {fmtMoney(Math.abs(r.profit))}
+                    </span>
                   </p>
                 </div>
-                <span className="font-semibold tabular-nums text-success">+{fmtMoney(g.salePrice ?? 0)}</span>
+                <span className="font-semibold tabular-nums text-success">+{fmtMoney(r.qty * r.unitPrice)}</span>
+                <button
+                  aria-label="撤销这笔售出"
+                  onClick={() => removeSale(r.gourd.id, r.saleId)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/40 active:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             ))
           )}
@@ -593,22 +759,37 @@ function ExpenseTab({
 /* ---------------- 仪表盘 ---------------- */
 function DashboardTab() {
   const { gourds, expenses } = useBusinessStore();
-  const trend = profitTrend(gourds, expenses, 6);
+  const [range, setRange] = React.useState<"6m" | "12m">("6m");
+  const trend = profitTrend(gourds, expenses, range === "6m" ? 6 : 12);
   const sellers = bestSellers(gourds);
 
-  const totalRevenue = gourds.reduce((s, g) => s + (g.status === "sold" ? g.salePrice ?? 0 : 0), 0);
-  const totalCost =
-    gourds.reduce((s, g) => s + (g.status === "sold" ? g.costPrice + g.shippingCost : 0), 0) +
-    expenses.reduce((s, e) => s + e.amount, 0);
+  const year = new Date().getFullYear();
+  const thisYear = yearSummary(gourds, expenses, year);
+
+  const totalRevenue = gourds.reduce((s, g) => s + revenueOf(g), 0);
+  const totalGoodsCost = gourds.reduce((s, g) => s + unitCost(g) * soldQty(g), 0);
+  const totalExpense = expenses.reduce((s, e) => s + e.amount, 0);
+  const totalCost = totalGoodsCost + totalExpense;
   const totalProfit = totalRevenue - totalCost;
 
   return (
     <div className="space-y-4">
+      {/* 今年汇总：年度总利润一眼可见 */}
+      <Card className="border-none bg-gradient-to-br from-primary via-primary to-accent text-primary-foreground">
+        <CardContent className="p-4">
+          <p className="text-[11px] uppercase tracking-widest opacity-85">{year} 年 · 年度总利润</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{fmtMoney(thisYear.profit)}</p>
+          <p className="mt-1.5 text-xs opacity-85">
+            全年收入 {fmtMoney(thisYear.revenue)} · 售出 {thisYear.soldCount} 件 · 成本（含经营支出）{fmtMoney(thisYear.cost)}
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "总收入", value: totalRevenue, tone: "text-foreground" },
-          { label: "总成本", value: totalCost, tone: "text-muted-foreground" },
-          { label: "净利润", value: totalProfit, tone: totalProfit >= 0 ? "text-success" : "text-destructive" },
+          { label: "累计收入", value: totalRevenue, tone: "text-foreground" },
+          { label: "累计成本", value: totalCost, tone: "text-muted-foreground" },
+          { label: "累计净利润", value: totalProfit, tone: totalProfit >= 0 ? "text-success" : "text-destructive" },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-3 text-center">
@@ -618,11 +799,26 @@ function DashboardTab() {
           </Card>
         ))}
       </div>
+      <p className="px-1 text-[10px] leading-relaxed text-muted-foreground">
+        成本按"卖出多少摊多少"计算：批量进货未卖完的部分不计入成本，利润更真实。
+      </p>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-1.5 text-sm">
-            <BarChart3 className="h-4 w-4 text-primary" /> 月度利润趋势
+          <CardTitle className="flex items-center justify-between text-sm">
+            <span className="flex items-center gap-1.5">
+              <BarChart3 className="h-4 w-4 text-primary" /> 利润趋势
+            </span>
+            <span className="w-36">
+              <Segmented
+                value={range}
+                onChange={setRange}
+                options={[
+                  { label: "半年", value: "6m" },
+                  { label: "12个月", value: "12m" },
+                ]}
+              />
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -689,7 +885,8 @@ function DashboardTab() {
 export default function BusinessPage() {
   const [tab, setTab] = React.useState<"stock" | "ledger" | "board">("stock");
   const { gourds, config } = useBusinessStore();
-  const inStock = gourds.filter((g) => g.status === "in_stock").length;
+  const remainTotal = gourds.reduce((s, g) => s + remainQty(g), 0);
+  const soldTotal = gourds.reduce((s, g) => s + soldQty(g), 0);
   const speechOK = React.useMemo(() => speechSupported(), []);
 
   const [voiceOpen, setVoiceOpen] = React.useState(false);
@@ -700,12 +897,12 @@ export default function BusinessPage() {
   const [salePrefill, setSalePrefill] = React.useState<SalePrefill | null>(null);
   const [expensePrefill, setExpensePrefill] = React.useState<ExpensePrefill | null>(null);
 
-  /** 售出定位：编号精确 / 尾号数字 / 名称模糊，优先未售出的 */
+  /** 售出定位：编号精确 / 尾号数字 / 名称模糊，优先还有剩余库存的 */
   const findSaleTarget = (query: string): Gourd | undefined => {
     const q = query.trim().toUpperCase();
     if (!q) return undefined;
     const candidates = [...gourds].sort((a, b) => {
-      const rank = (g: Gourd) => (g.status === "sold" ? 1 : 0);
+      const rank = (g: Gourd) => (remainQty(g) > 0 ? 0 : 1);
       return rank(a) - rank(b);
     });
     return (
@@ -726,8 +923,8 @@ export default function BusinessPage() {
         setVoiceError(`没找到「${p.query || "该商品"}」，试试报编号，如 ${config.codePrefix}-0001 或「3号」`);
         return;
       }
-      if (target.status === "sold") {
-        setVoiceError(`${target.code} ${target.name} 已是售出状态`);
+      if (remainQty(target) === 0) {
+        setVoiceError(`${target.code} ${target.name} 已经售罄了`);
         return;
       }
       setTab("stock");
@@ -771,8 +968,7 @@ export default function BusinessPage() {
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Store className="h-3.5 w-3.5" />
-            在库 {inStock} · 预定 {gourds.filter((g) => g.status === "reserved").length} · 已售{" "}
-            {gourds.filter((g) => g.status === "sold").length}
+            在库 {remainTotal} 件 · 已售 {soldTotal} 件
           </div>
           <div className="flex gap-1">
             {speechOK && (

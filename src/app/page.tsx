@@ -16,7 +16,7 @@ import { ClientGate } from "@/components/client-gate";
 import { Fab } from "@/components/fab";
 import { usePlannerStore } from "@/stores/planner";
 import { useFinanceStore, monthTotals } from "@/stores/finance";
-import { useBusinessStore } from "@/stores/business";
+import { useBusinessStore, remainQty } from "@/stores/business";
 import { useCollectionStore } from "@/stores/collection";
 import { useSettingsStore } from "@/stores/settings";
 import { fetchWeather, type WeatherNow } from "@/lib/weather";
@@ -76,7 +76,7 @@ function useTodayInsight() {
         totalCount: todos.length,
         monthExpense: monthTotals(records, monthStr()).expense,
         collectionAlerts: collection.filter((c) => c.humidityCare).slice(0, 3).map((c) => c.name),
-        stockCount: gourds.filter((g) => g.status === "in_stock").length,
+        stockCount: gourds.reduce((s, g) => s + remainQty(g), 0),
         clientHour: now.getHours(),
         clientTime: `${todayStr()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
         slotLabel: daySlot(now).label,
@@ -167,8 +167,8 @@ function OverviewCards() {
   const done = todayTodos.filter((t) => t.done).length;
   const rate = todayTodos.length ? Math.round((done / todayTodos.length) * 100) : 0;
   const { expense } = monthTotals(records, monthStr());
-  const inStock = gourds.filter((g) => g.status === "in_stock").length;
-  const reserved = gourds.filter((g) => g.status === "reserved").length;
+  const inStock = gourds.reduce((s, g) => s + remainQty(g), 0);
+  const reserved = gourds.filter((g) => g.status === "reserved").reduce((s, g) => s + remainQty(g), 0);
   const lowStock = inStock <= 2;
 
   const items = [
