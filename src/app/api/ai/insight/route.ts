@@ -15,12 +15,41 @@ interface InsightInput {
   monthExpense?: number;
   collectionAlerts?: string[];
   stockCount?: number;
+  /** 用户本地小时（0-23）——服务器跑在海外节点（UTC），时间判断必须以客户端为准 */
+  clientHour?: number;
+  /** 用户本地完整时间串，供 AI 参考 */
+  clientTime?: string;
+  /** 客户端时段名：晨报/午报/午后报/晚报/夜报 */
+  slotLabel?: string;
+}
+
+/** 问候语：与前端 daySlot 的时段边界保持一致 */
+function greeting(hour: number): string {
+  if (hour < 5) return "凌晨好";
+  if (hour < 11) return "早安";
+  if (hour < 14) return "午安";
+  if (hour < 18) return "下午好";
+  return "晚上好";
+}
+
+const ALL_GREETS = ["凌晨好", "早上好", "早安", "中午好", "午安", "下午好", "晚上好", "晚安"];
+
+/** 兜底：AI 输出开头若带了错误时段的问候词，强制替换为正确问候（只检查前 14 字，避免误伤正文如"晚上好好休息"） */
+function fixGreeting(text: string, correct: string): string {
+  const head = text.slice(0, 14);
+  for (const g of ALL_GREETS) {
+    if (g === correct) continue;
+    const idx = head.indexOf(g);
+    if (idx !== -1) return text.slice(0, idx) + correct + text.slice(idx + g.length);
+  }
+  return text;
 }
 
 function localInsight(d: InsightInput): string {
   const name = d.nickname || "77";
-  const hour = new Date().getHours();
-  const greet = hour < 5 ? "凌晨好" : hour < 11 ? "早安" : hour < 14 ? "午安" : hour < 18 ? "下午好" : "晚上好";
+  // 优先使用客户端上报的本地小时；缺失时才退回服务器时间（本地 localhost 场景两者一致）
+  const hour = typeof d.clientHour === "number" ? d.clientHour : new Date().getHours();
+  const greet = greeting(hour);
   const parts: string[] = [`${name}，${greet}。`];
 
   if (d.weather?.desc) {
@@ -65,17 +94,21 @@ export async function POST(req: Request) {
   }
 
   try {
+    const hour = typeof input.clientHour === "number" ? input.clientHour : new Date().getHours();
+    const greet = greeting(hour);
+    const slot = input.slotLabel || "晨报";
     const { text } = await generateText({
       model,
       system:
-        "你是「77的工作台」的贴心晨报助手。用中文生成一段 60~90 字的拟人化问候：亲切自然、口语化、不做作。" +
+        `你是「77的工作台」的贴心${slot}助手。用中文生成一段 60~90 字的拟人化问候：亲切自然、口语化、不做作。` +
+        `当前是用户本地时间 ${input.clientTime || `${hour} 点`}，问候语必须符合这个时段（本时段标准问候：「${greet}」），严禁使用其他时段的问候（如晚上说早安）。` +
         "结合给到的天气、待办完成情况、本月支出、文玩养护提醒等信息给出 1~2 条具体建议（如天气干燥要给葫芦加湿）。" +
         "直接输出正文，不要标题、不要列表、不要 emoji 滥用（最多 1 个）。",
-      prompt: `数据：${JSON.stringify(input, null, 0)}\n当前时间：${new Date().toLocaleString("zh-CN")}`,
+      prompt: `数据：${JSON.stringify(input, null, 0)}`,
       maxTokens: 220,
       temperature: 0.8,
     });
-    return NextResponse.json({ text: text.trim(), source: "ai" });
+    return NextResponse.json({ text: fixGreeting(text.trim(), greet), source: "ai" });
   } catch {
     return NextResponse.json({ text: localInsight(input), source: "local" });
   }

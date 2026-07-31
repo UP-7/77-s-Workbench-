@@ -65,6 +65,8 @@ function useTodayInsight() {
       const gourds = useBusinessStore.getState().gourds;
       const collection = useCollectionStore.getState().items;
 
+      // 时间的唯一可信来源是用户设备：服务器在海外节点（UTC），严禁由服务端推断时段
+      const now = new Date();
       const payload = {
         nickname,
         city,
@@ -75,6 +77,9 @@ function useTodayInsight() {
         monthExpense: monthTotals(records, monthStr()).expense,
         collectionAlerts: collection.filter((c) => c.humidityCare).slice(0, 3).map((c) => c.name),
         stockCount: gourds.filter((g) => g.status === "in_stock").length,
+        clientHour: now.getHours(),
+        clientTime: `${todayStr()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
+        slotLabel: daySlot(now).label,
       };
 
       const res = await fetch("/api/ai/insight", {
