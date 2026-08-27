@@ -16,15 +16,20 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "exceljs": "^4.4.0",
     "idb": "^8.0.0",
     "jspdf": "^4.2.1",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.427.0",
     "next": "^14.2.5",
     "next-themes": "^0.3.0",
+    "pdfjs-dist": "^6.2.108",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
     "tailwind-merge": "^2.5.2",
+    "tesseract.js": "^7.0.0",
+    "zod": "^4.4.3",
     "zustand": "^4.5.4"
   },
   "devDependencies": {
@@ -36,5 +41,6 @@
     "tailwindcss": "^3.4.10",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.5.4"
-  }
+  },
+  "packageManager": "pnpm@8.15.6+sha512.77b89e9be77a2b06ad8f403a19cae5e22976f61023f98ad323d5c30194958ebc02ee0a6ae5d13ee454f6134e4e8caf29a05f0b1a0e1d2b17bca6b6a1f1159f86"
 }

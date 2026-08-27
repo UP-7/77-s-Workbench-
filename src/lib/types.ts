@@ -134,6 +134,52 @@ export interface FeedItem {
   publishedAt: number;
 }
 
+/* ================= 发票管家 ================= */
+export type InvoiceStatus = "pending" | "processing" | "success" | "failed";
+
+export interface InvoiceFields {
+  buyerName?: string;
+  invoiceNumber?: string;
+  amount?: number;
+  /** YYYY-MM-DD */
+  date?: string;
+  invoiceType?: string;
+  buyer?: string;
+  seller?: string;
+  /** 事项：酒店、火车票、餐费等 */
+  item?: string;
+  /** 备注：走访、出差等 */
+  remark?: string;
+}
+
+export interface InvoiceRecord {
+  id: string;
+  batchId?: string;
+  fileKey: string;
+  originalName: string;
+  newName?: string;
+  ext: string;
+  mime: string;
+  size: number;
+  status: InvoiceStatus;
+  fields: InvoiceFields;
+  error?: string;
+  ocrSource?: "cloud" | "local" | "manual";
+  thumbAt?: number;
+  createdAt: number;
+}
+
+export interface InvoiceBatch {
+  id: string;
+  name: string;
+  createdAt: number;
+  records: InvoiceRecord[];
+  total: number;
+  success: number;
+  failed: number;
+  reimburser?: string;
+}
+
 /* ================= 备份 ================= */
 export interface BackupPayload {
   version: 1;
