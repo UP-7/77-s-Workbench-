@@ -206,9 +206,7 @@ export default function InvoicesPage() {
                   <button
                     aria-label="清空"
                     disabled={processing}
-                    onClick={() => {
-                      if (window.confirm("清空本次所有发票？")) void clearRecords();
-                    }}
+                    onClick={() => void clearRecords()}
                     className="rounded-2xl bg-destructive/10 px-4 text-destructive disabled:opacity-50"
                   >
                     <Trash2 size={17} />

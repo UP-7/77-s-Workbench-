@@ -6,7 +6,6 @@ import { blobToBase64, compressForOcr, makeThumb } from "@/lib/imageUtils";
 import { pdfFirstPageToPng } from "@/lib/pdf";
 import { guessItem, hasKeyFields, mergeFields, parseInvoiceText } from "@/lib/invoice/parse";
 import { aiCleanInvoice } from "@/lib/ai";
-import { fetchRetry } from "@/lib/fetchRetry";
 
 /** 确保记录有可用的 OCR 图片（PDF -> 首页 PNG）与缩略图，返回 OCR 用图片 */
 export async function ensureOcrImage(rec: InvoiceRecord): Promise<Blob> {
@@ -63,17 +62,20 @@ export async function recognizeOne(
 
   let cloudOk = false;
   try {
-    const r = await fetchRetry("/api/ocr", {
+    // 直接 fetch（不重试）：501 = OCR 未配置，是永久错误不是瞬态错误
+    const r = await fetch("/api/ocr", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ imageBase64: base64 }),
       signal: AbortSignal.timeout(30_000),
     });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data?.error || `云端识别失败(${r.status})`);
-    fields = data.fields || {};
-    rawText = String(data.rawText || "");
-    cloudOk = true;
+    if (r.ok) {
+      const data = await r.json();
+      fields = data.fields || {};
+      rawText = String(data.rawText || "");
+      cloudOk = true;
+    }
+    // 501/502 等非 OK 响应：静默降级到本地，不记为错误
   } catch {
     cloudOk = false;
   }

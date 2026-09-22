@@ -114,11 +114,7 @@ export default function HistoryPanel() {
                 </button>
                 <button
                   aria-label="删除批次"
-                  onClick={() => {
-                    if (window.confirm(`删除批次「${b.name}」？关联文件将一并清除`)) {
-                      void deleteBatch(b.id);
-                    }
-                  }}
+                  onClick={() => void deleteBatch(b.id)}
                   className="rounded-xl bg-destructive/10 p-2 text-destructive"
                 >
                   <Trash2 size={15} />

@@ -87,7 +87,7 @@ export default function InvoiceCard({
           aria-label="删除这张发票"
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`删除「${record.originalName}」？`)) void removeRecord(record.id);
+            void removeRecord(record.id);
           }}
           className="absolute bottom-1.5 right-1.5 rounded-full bg-card/90 p-1.5 text-destructive shadow-sm backdrop-blur active:scale-90"
         >

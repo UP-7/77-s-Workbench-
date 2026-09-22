@@ -145,6 +145,7 @@ export const useInvoiceStore = create<InvoiceState>()(
           set({ records: get().records.filter((r) => r.id !== id) });
           const inBatch = get().batches.some((b) => b.records.some((r) => r.id === id));
           if (!inBatch) await deleteInvoiceFiles(id).catch(() => undefined);
+          toast("已删除");
         },
 
         clearRecords: async () => {
