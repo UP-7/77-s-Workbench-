@@ -13,6 +13,8 @@ import {
   Mic,
   Settings2,
   X,
+  Pencil,
+  Undo2,
 } from "lucide-react";
 import {
   BarChart,
@@ -243,7 +245,8 @@ function StockTab({
   salePrefill: SalePrefill | null;
   onConsumed: () => void;
 }) {
-  const { gourds, config, cycleStatus, addSale, removeGourd, addGourd } = useBusinessStore();
+  const { gourds, config, cycleStatus, addSale, removeGourd, addGourd, editGourd, removeSale } =
+    useBusinessStore();
   const [view, setView] = React.useState<"stock" | "sold">("stock");
   const [addOpen, setAddOpen] = React.useState(false);
   const [scanOpen, setScanOpen] = React.useState(false);
@@ -258,6 +261,47 @@ function StockTab({
   const [cost, setCost] = React.useState("");
   const [shipping, setShipping] = React.useState("");
   const [qty, setQty] = React.useState("1");
+
+  /* 编辑库存：填错时直接改，不必删了重建 */
+  const [editId, setEditId] = React.useState<string | null>(null);
+  const [eName, setEName] = React.useState("");
+  const [eVariety, setEVariety] = React.useState("");
+  const [eCost, setECost] = React.useState("");
+  const [eShipping, setEShipping] = React.useState("");
+  const [eQty, setEQty] = React.useState("1");
+  const [eNote, setENote] = React.useState("");
+
+  // 始终跟随 store 最新值，撤销售出流水后弹层内数据同步刷新
+  const editTarget = editId ? (gourds.find((g) => g.id === editId) ?? null) : null;
+
+  const openEdit = (g: Gourd) => {
+    vibrate(15);
+    setEditId(g.id);
+    setEName(g.name);
+    setEVariety(g.variety);
+    setECost(String(g.costPrice));
+    setEShipping(g.shippingCost ? String(g.shippingCost) : "");
+    setEQty(String(totalQty(g)));
+    setENote(g.note ?? "");
+  };
+
+  const editSoldQty = editTarget ? soldQty(editTarget) : 0;
+  const editQtyFloor = Math.max(1, editSoldQty);
+  const editQtyInvalid = Boolean(eQty) && Number(eQty) < editQtyFloor;
+
+  const submitEdit = () => {
+    if (!editTarget || !eName.trim() || !eCost || editQtyInvalid) return;
+    editGourd(editTarget.id, {
+      name: eName,
+      variety: eVariety,
+      costPrice: Number(eCost) || 0,
+      shippingCost: Number(eShipping) || 0,
+      quantity: Math.max(editQtyFloor, Math.round(Number(eQty) || 1)),
+      note: eNote.trim() || undefined,
+    });
+    vibrate(20);
+    setEditId(null);
+  };
 
   /* 语音结果消费：进货预填 / 售出定位 */
   React.useEffect(() => {
@@ -409,7 +453,11 @@ function StockTab({
               className={cn("transition-all", highlight === g.id && "ring-2 ring-primary")}
             >
               <CardContent className="flex items-center gap-3 p-4">
-                <div className="min-w-0 flex-1">
+                <button
+                  onClick={() => openEdit(g)}
+                  aria-label={`编辑 ${g.name}`}
+                  className="min-w-0 flex-1 text-left active:opacity-60"
+                >
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[10px] text-muted-foreground">{g.code}</span>
                     {total > 1 && (
@@ -419,7 +467,10 @@ function StockTab({
                     )}
                     {g.reservedBy && <span className="text-[10px] text-amber-600">留给 {g.reservedBy}</span>}
                   </div>
-                  <p className="truncate text-[15px] font-semibold">{g.name}</p>
+                  <p className="flex items-center gap-1 truncate text-[15px] font-semibold">
+                    {g.name}
+                    <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                  </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {g.variety} · {total > 1 ? `单件成本 ${fmtMoney(uc)}` : `成本 ${fmtMoney(g.costPrice + g.shippingCost)}`}
                     {sold > 0 && (
@@ -431,7 +482,7 @@ function StockTab({
                       </>
                     )}
                   </p>
-                </div>
+                </button>
                 {remain > 0 && (
                   <Button size="sm" className="h-8 shrink-0 px-3" onClick={() => openSell(g)}>
                     售出
@@ -585,6 +636,140 @@ function StockTab({
             确认售出{Number(saleQty) > 1 ? ` ${saleQty} 件` : ""}
           </Button>
         </div>
+      </BottomSheet>
+
+      {/* 编辑库存：改错的信息，不用删了重建 */}
+      <BottomSheet
+        open={Boolean(editTarget)}
+        onClose={() => setEditId(null)}
+        title={`编辑 · ${editTarget?.code ?? ""}`}
+      >
+        {editTarget && (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="e-name">名称</Label>
+              <Input id="e-name" value={eName} onChange={(e) => setEName(e.target.value)} />
+            </div>
+            <div>
+              <Label>品种 / 分类</Label>
+              <div className="flex flex-wrap gap-2">
+                {config.varieties.map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setEVariety(v)}
+                    className={cn(
+                      "h-9 rounded-full border px-4 text-sm",
+                      eVariety === v
+                        ? "border-primary bg-primary/10 font-medium text-primary"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="e-qty">数量（件）</Label>
+                <Input
+                  id="e-qty"
+                  type="number"
+                  inputMode="numeric"
+                  min={editQtyFloor}
+                  value={eQty}
+                  onChange={(e) => setEQty(e.target.value)}
+                  className={cn(editQtyInvalid && "border-destructive")}
+                />
+              </div>
+              <div>
+                <Label htmlFor="e-cost">进货总价 ¥</Label>
+                <Input
+                  id="e-cost"
+                  type="number"
+                  inputMode="decimal"
+                  value={eCost}
+                  onChange={(e) => setECost(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="e-ship">快递费 ¥</Label>
+                <Input
+                  id="e-ship"
+                  type="number"
+                  inputMode="decimal"
+                  value={eShipping}
+                  onChange={(e) => setEShipping(e.target.value)}
+                />
+              </div>
+            </div>
+            {editQtyInvalid ? (
+              <p className="text-center text-xs text-destructive">
+                已售出 {editSoldQty} 件，数量不能少于 {editQtyFloor}
+                {editSoldQty > 0 && " · 如需减少请先在下方撤销售出记录"}
+              </p>
+            ) : (
+              Number(eQty) > 1 &&
+              Number(eCost) > 0 && (
+                <p className="text-center text-xs text-muted-foreground">
+                  {eQty} 件共 {fmtMoney(Number(eCost) + (Number(eShipping) || 0))} · 单件摊{" "}
+                  {fmtMoney(
+                    (Number(eCost) + (Number(eShipping) || 0)) / Math.max(1, Number(eQty))
+                  )}
+                </p>
+              )
+            )}
+            <div>
+              <Label htmlFor="e-note">备注</Label>
+              <Input
+                id="e-note"
+                placeholder="可留空"
+                value={eNote}
+                onChange={(e) => setENote(e.target.value)}
+              />
+            </div>
+
+            {/* 售出流水：单价记错时可撤销后重记 */}
+            {salesOf(editTarget).length > 0 && (
+              <div>
+                <Label>售出记录（点撤销可改价重记）</Label>
+                <div className="space-y-1.5">
+                  {salesOf(editTarget).map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2"
+                    >
+                      <span className="text-xs text-muted-foreground">{sale.date}</span>
+                      <span className="flex-1 text-sm tabular-nums">
+                        {sale.qty} 件 × {fmtMoney(sale.unitPrice)} ={" "}
+                        <span className="font-semibold">{fmtMoney(sale.qty * sale.unitPrice)}</span>
+                      </span>
+                      <button
+                        aria-label="撤销这笔售出"
+                        onClick={() => {
+                          removeSale(editTarget.id, sale.id);
+                          vibrate(15);
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground active:text-destructive"
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={submitEdit}
+              disabled={!eName.trim() || !eCost || editQtyInvalid}
+            >
+              保存修改
+            </Button>
+          </div>
+        )}
       </BottomSheet>
 
       <ScanSheet open={scanOpen} onClose={() => setScanOpen(false)} onFound={onScanFound} />

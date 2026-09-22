@@ -74,6 +74,18 @@ interface BusinessState {
     note?: string;
   }) => void;
   updateGourd: (id: string, patch: Partial<Gourd>) => void;
+  /** 编辑库存基础信息（填错时修正）：数量不得低于已售件数，改后自动校正状态 */
+  editGourd: (
+    id: string,
+    patch: {
+      name?: string;
+      variety?: string;
+      costPrice?: number;
+      shippingCost?: number;
+      quantity?: number;
+      note?: string;
+    }
+  ) => void;
   removeGourd: (id: string) => void;
   cycleStatus: (id: string) => void;
   /** 售出 qty 件，单价 unitPrice；卖光自动置为售罄 */
@@ -144,6 +156,36 @@ export const useBusinessStore = create<BusinessState>()(
         })),
       updateGourd: (id, patch) =>
         set((s) => ({ gourds: s.gourds.map((g) => (g.id === id ? { ...g, ...patch } : g)) })),
+      editGourd: (id, patch) =>
+        set((s) => ({
+          gourds: s.gourds.map((raw) => {
+            if (raw.id !== id) return raw;
+            const g = normalized(raw);
+            const sold = soldQty(g);
+            // 数量下限 = 已售件数，否则剩余件数会变成负值
+            const quantity =
+              patch.quantity === undefined
+                ? totalQty(g)
+                : Math.max(Math.max(1, sold), Math.round(patch.quantity));
+            const soldOut = quantity - sold <= 0;
+            return {
+              ...g,
+              name: (patch.name ?? g.name).trim() || g.name,
+              variety: patch.variety ?? g.variety,
+              costPrice: Math.max(0, patch.costPrice ?? g.costPrice),
+              shippingCost: Math.max(0, patch.shippingCost ?? g.shippingCost),
+              quantity,
+              note: patch.note ?? g.note,
+              // 改数量后校正状态：卖光→售罄；还有剩且原为售罄→回到在库
+              status: soldOut
+                ? ("sold" as GourdStatus)
+                : g.status === "sold"
+                  ? ("in_stock" as GourdStatus)
+                  : g.status,
+              soldAt: soldOut ? (g.soldAt ?? todayStr()) : undefined,
+            };
+          }),
+        })),
       removeGourd: (id) => set((s) => ({ gourds: s.gourds.filter((g) => g.id !== id) })),
       cycleStatus: (id) =>
         set((s) => ({
