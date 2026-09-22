@@ -23,7 +23,7 @@ export async function pdfFirstPageToPng(blob: Blob, maxWidth = 1400): Promise<Bl
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+    await page.render({ canvasContext: ctx, viewport }).promise;
 
     return await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("PDF 转图片失败"))), "image/png")
