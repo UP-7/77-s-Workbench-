@@ -12,6 +12,16 @@ const withPWA = withPWAInit({
     clientsClaim: true,
     runtimeCaching: [
       {
+        // Tesseract 模型/内核 CDN：缓存后即可离线 OCR
+        urlPattern: /^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com|tessdata\.projectnaptha\.com)\/.*/i,
+        handler: "CacheFirst",
+        options: {
+          cacheName: "ocr-assets",
+          expiration: { maxEntries: 60, maxAgeSeconds: 60 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+      {
         urlPattern: /^https?.*\/api\/feed.*/i,
         handler: "NetworkFirst",
         options: {
@@ -46,6 +56,11 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  webpack: (config) => {
+    // pdfjs-dist 在浏览器端不需要 Node 的 canvas 可选依赖
+    config.resolve.alias.canvas = false;
+    return config;
+  },
 };
 
 export default withPWA(nextConfig);

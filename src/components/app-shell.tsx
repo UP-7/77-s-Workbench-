@@ -18,9 +18,11 @@ import {
   Sun,
   Sparkles,
   PenTool,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReminders } from "@/hooks/use-reminders";
+import Toaster from "@/components/ui/Toaster";
 
 const NAV_ITEMS = [
   { href: "/", label: "首页", sub: "Dashboard", icon: Home },
@@ -30,6 +32,7 @@ const NAV_ITEMS = [
   { href: "/collection", label: "文玩阁", sub: "Collection", icon: Gem },
   { href: "/atelier", label: "素材坊", sub: "Atelier", icon: PenTool },
   { href: "/business", label: "生意商账", sub: "Business Hub", icon: Store },
+  { href: "/invoices", label: "发票管家", sub: "Invoices", icon: Receipt },
   { href: "/settings", label: "设置", sub: "Settings", icon: Settings },
 ] as const;
 
@@ -157,6 +160,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* 内容区 */}
       <main className="flex-1 pb-safe">{children}</main>
+
+      <Toaster />
     </div>
   );
 }

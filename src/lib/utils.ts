@@ -57,3 +57,33 @@ export function vibrate(pattern: number | number[] = 30) {
     }
   }
 }
+
+/* ================= 发票管家工具 ================= */
+
+const _pad = (n: number) => String(n).padStart(2, "0");
+
+/** YYYY-MM-DD HH:mm */
+export function formatTimeCN(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${_pad(d.getMonth() + 1)}-${_pad(d.getDate())} ${_pad(d.getHours())}:${_pad(d.getMinutes())}`;
+}
+
+/** 文件名时间戳 yyyyMMdd_HHmm */
+export function formatStamp(d: Date = new Date()): string {
+  return `${d.getFullYear()}${_pad(d.getMonth() + 1)}${_pad(d.getDate())}_${_pad(d.getHours())}${_pad(d.getMinutes())}`;
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+export function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
